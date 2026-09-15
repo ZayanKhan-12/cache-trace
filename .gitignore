@@ -1,0 +1,18 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# Generated traces and analysis output -- never commit trace data.
+*.l2
+*.zst
+*.trace
+!samples/**
+l1-stats.json
+before.json
+after.json

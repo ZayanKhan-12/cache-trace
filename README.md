@@ -63,6 +63,9 @@ For different evaluation purposes, we recommend the following clusters/workloads
 * **TTL-related**: mix of small and large TTLs: cluster 52, cluster22, cluster25, cluster11; small TTLs only: cluster18, cluster19, cluster6, cluster7. 
 
 
+* **low locality (large reuse distance)**: cluster4, cluster11, cluster19, cluster34, cluster48, cluster50, cluster54 have the largest inter-arrival gaps. If you need lower locality still, filter a trace through an L1 cache and use the resulting miss stream — see [Tooling](#tooling) below. 
+
+
 *others?*: feel free to contact us if you are looking for a trace for specific purpose. 
 
 ---
@@ -74,6 +77,29 @@ This table includes the following fields, each field is the mean value of the me
 
 The fields include `production miss ratio`, 
 `workload category` (1: storage, 2: computation, 3: transient item), `key size`, `value size`, `request rate`, `mean object frequency`, `one-hit-wonder ratio (%)`, `compulsory miss ratio (%)`, `common TTLs`, `working set size`, `operations`, `Zipf alpha`. 
+
+
+---
+
+
+### Tooling
+The [`scripts/`](scripts) directory contains small, dependency-free Python tools for working with these traces (Python 3.9+, nothing to install):
+
+  * **[`scripts/l1_filter.py`](scripts/l1_filter.py)** replays a trace through an L1 cache and writes out the **miss stream** as a new trace in the same format. This is how you obtain an *L2 trace*, and how you build a workload with deliberately low locality: the L1 absorbs the hot, closely-spaced re-references, and what remains has a much larger reuse distance. Supports LRU/FIFO/CLOCK/RANDOM eviction, byte- or object-based capacity, and optional TTL awareness.
+  * **[`scripts/reuse_distance.py`](scripts/reuse_distance.py)** reports the reuse-distance (stack-distance) distribution of a trace, so you can quantify how much locality a workload has before and after filtering.
+
+```sh
+# absorb the hot traffic in a 1MB LRU L1 and keep the miss stream
+./scripts/l1_filter.py samples/2020Mar/cluster001 --cache-size 1MB -o cluster001.l2
+
+# compare locality before and after
+./scripts/reuse_distance.py samples/2020Mar/cluster001 --max-requests 200000
+./scripts/reuse_distance.py cluster001.l2
+```
+
+On the first 200,000 requests of `cluster001`, a 1 MB LRU L1 absorbs 95.8% of reads and raises the mean reuse distance from 433 to 1,866 (median 203 to 1,973), while the one-hit-wonder ratio rises from 0.18 to 0.50.
+
+See [`scripts/README.md`](scripts/README.md) for the full guide, including how to pick the L1 size.
 
 
 ---

@@ -1,0 +1,20 @@
+# Configuration for the helper scripts under scripts/.
+# The traces themselves are plain data; this file only exists so that linting
+# and formatting are reproducible in CI and locally.
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+extend-exclude = ["samples"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
+ignore = [
+    "UP006",  # keep typing.Dict/List spellings for Python 3.8 compatibility
+    "UP035",
+    "UP007",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests import _path purely for its sys.path side effect before other imports.
+"tests/*" = ["E402"]

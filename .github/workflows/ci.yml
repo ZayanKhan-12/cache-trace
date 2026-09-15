@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ruff
+        run: pip install "ruff==0.6.9"
+      - name: Lint
+        run: ruff check scripts tests
+      - name: Check formatting
+        run: ruff format --check scripts tests
+
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Run the test suite
+        # The scripts are dependency-free by design, so there is nothing to
+        # install: a bare interpreter must be enough to run everything.
+        run: python -m unittest discover -s tests -t tests -v
+
+  smoke:
+    name: End-to-end smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Filter a bundled sample through an L1 cache
+        run: |
+          python scripts/l1_filter.py samples/2020Mar/cluster001 \
+            --policy lru --cache-size 100KB --max-requests 50000 \
+            --stats-json l1-stats.json -o cluster001.l2
+          test -s cluster001.l2
+      - name: Measure locality before and after filtering
+        run: |
+          python scripts/reuse_distance.py samples/2020Mar/cluster001 \
+            --max-requests 50000 --json before.json
+          python scripts/reuse_distance.py cluster001.l2 --json after.json
+      - name: Assert the L2 trace really does have lower locality
+        run: |
+          python - <<'PY'
+          import json
+          before = json.load(open("before.json"))
+          after = json.load(open("after.json"))
+          print("before:", json.dumps(before["reuse_distance"]))
+          print("after :", json.dumps(after["reuse_distance"]))
+          assert after["reuse_distance"]["mean"] > before["reuse_distance"]["mean"]
+          assert after["one_hit_wonder_ratio"] > before["one_hit_wonder_ratio"]
+          print("OK: filtering lowered locality")
+          PY
